@@ -24,6 +24,7 @@ import qualified Data.Versions         as Version
 import qualified Dhall.Core
 import qualified Dhall.Map
 import qualified Dhall.TypeCheck
+import qualified System.Directory      as Directory
 import qualified Web.Bower.PackageMeta as Bower
 
 import qualified Spago.Dhall           as Dhall
@@ -110,15 +111,15 @@ parseConfig :: Spago Config
 parseConfig = do
   -- Here we try to migrate any config that is not in the latest format
   withConfigAST $ pure . addSourcePaths
-
   path <- askEnv envConfigPath
-  expr <- liftIO $ Dhall.inputExpr $ "./" <> path
+  absPath <- liftIO . fmap Text.pack . Directory.makeAbsolute . Text.unpack $ path
+  expr <- liftIO $ Dhall.inputExpr $ absPath 
   case expr of
     Dhall.RecordLit ks -> do
       packages :: Map PackageName Package <- Dhall.requireKey ks "packages" (\case
         Dhall.RecordLit pkgs ->
           fmap (Map.mapKeys PackageSet.PackageName . Dhall.Map.toMap)
-          $ traverse parsePackage pkgs
+            $ traverse parsePackage pkgs
         something -> throwM $ Dhall.PackagesIsNotRecord something)
 
       let sourcesType  = Dhall.list (Dhall.auto :: Dhall.Type Purs.SourcePath)
